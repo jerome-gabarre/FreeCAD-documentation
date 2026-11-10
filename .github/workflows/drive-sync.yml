@@ -1,0 +1,37 @@
+name: Sync to Google Drive
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  workflow_dispatch: # Permet de forcer la synchro manuellement
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cloner le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer rclone
+        run: sudo apt-get install -y rclone
+
+      - name: Configurer rclone et les clés
+        env:
+          GDRIVE_CRED_JSON: ${{ secrets.GDRIVE_CREDENTIALS }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          mkdir -p ~/.config/rclone
+          cat << EOF > ~/.config/rclone/rclone.conf
+          [gdrive]
+          type = drive
+          scope = drive
+          service_account_file = /tmp/sa.json
+          root_folder_id = $GDRIVE_FOLDER_ID
+          EOF
+          echo "$GDRIVE_CRED_JSON" > /tmp/sa.json
+
+      - name: Lancer la synchronisation
+        run: |
+          rclone sync ./ gdrive: --exclude ".git/**" --exclude ".github/**"
