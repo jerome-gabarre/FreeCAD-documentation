@@ -2,8 +2,8 @@ name: Sync to Google Drive
 
 on:
   schedule:
-    - cron: '0 3 * * *' # Déclenchement automatique tous les jours à 03:00 UTC
-  workflow_dispatch:    # Conserve le bouton d'exécution manuelle
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 
 jobs:
   sync:
@@ -12,25 +12,19 @@ jobs:
       - name: Cloner le dépôt officiel FreeCAD
         uses: actions/checkout@v4
         with:
-          repository: FreeCAD/FreeCAD-documentation # Pointe directement vers la source officielle
+          repository: FreeCAD/FreeCAD-documentation
 
       - name: Installer rclone
         run: sudo apt-get install -y rclone
 
-      - name: Configurer rclone et les clés
+      - name: Configurer rclone
         env:
-          GDRIVE_CRED_JSON: ${{ secrets.GDRIVE_CREDENTIALS }}
+          RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: |
           mkdir -p ~/.config/rclone
-          cat << EOF > ~/.config/rclone/rclone.conf
-          [gdrive]
-          type = drive
-          scope = drive
-          service_account_file = /tmp/sa.json
-          root_folder_id = $GDRIVE_FOLDER_ID
-          EOF
-          echo "$GDRIVE_CRED_JSON" > /tmp/sa.json
+          echo "$RCLONE_CONF" > ~/.config/rclone/rclone.conf
+          echo "root_folder_id = $GDRIVE_FOLDER_ID" >> ~/.config/rclone/rclone.conf
 
       - name: Lancer la synchronisation
         run: |
