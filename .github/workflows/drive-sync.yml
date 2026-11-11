@@ -45,11 +45,12 @@ jobs:
             --checksum \
             --no-update-modtime \
             --fast-list \
-            --drive-pacer-min-sleep 100ms \
-            --drive-pacer-burst 50 \
-            --tpslimit 8 \
-            --tpslimit-burst 8 \
-            --transfers 4 \
-            --checkers 8 \
+            --drive-pacer-min-sleep 50ms \
+            --drive-pacer-burst 100 \
+            --tpslimit 10 \
+            --tpslimit-burst 10 \
+            --transfers 8 \
+            --checkers 16 \
             --stats 30s \
-            --log-level DEBUG
+            --stats-one-line \
+            --log-level NOTICE
