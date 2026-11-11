@@ -2,7 +2,7 @@ name: Sync to Google Drive
 
 on:
   schedule:
-    - cron: '0 5 * * *'
+    - cron: '23 5 * * *'
   workflow_dispatch:
 
 jobs:
@@ -37,9 +37,11 @@ jobs:
             --checksum \
             --no-update-modtime \
             --fast-list \
+            --drive-pacer-min-sleep 100ms \
+            --drive-pacer-burst 50 \
             --tpslimit 8 \
             --tpslimit-burst 8 \
             --transfers 4 \
             --checkers 8 \
             --stats 30s \
-            --log-level DEBUG
+            --log-level INFO
