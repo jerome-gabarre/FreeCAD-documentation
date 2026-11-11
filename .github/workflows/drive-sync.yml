@@ -15,10 +15,16 @@ jobs:
           repository: FreeCAD/FreeCAD-documentation
           fetch-depth: 1
 
-      - name: Installer rclone
+      - name: Installer rclone (Binaire statique officiel)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y rclone
+          if ! command -v rclone >/dev/null 2>&1; then
+            curl -fsSL https://github.com/rclone/rclone/releases/latest/download/rclone-current-linux-amd64.zip -o rclone.zip
+            unzip -q rclone.zip
+            sudo cp rclone-*-linux-amd64/rclone /usr/local/bin/rclone
+            sudo chmod 755 /usr/local/bin/rclone
+            rm -rf rclone.zip rclone-*-linux-amd64
+          fi
+          rclone version
 
       - name: Configurer rclone
         env:
