@@ -13,9 +13,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: FreeCAD/FreeCAD-documentation
+          fetch-depth: 1
 
       - name: Installer rclone
-        run: sudo apt-get install -y rclone
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rclone
 
       - name: Configurer rclone
         env:
@@ -23,9 +26,20 @@ jobs:
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: |
           mkdir -p ~/.config/rclone
-          echo "$RCLONE_CONF" > ~/.config/rclone/rclone.conf
-          echo "root_folder_id = $GDRIVE_FOLDER_ID" >> ~/.config/rclone/rclone.conf
+          printf "%s\n" "$RCLONE_CONF" > ~/.config/rclone/rclone.conf
+          printf "\nroot_folder_id = %s\n" "$GDRIVE_FOLDER_ID" >> ~/.config/rclone/rclone.conf
 
       - name: Lancer la synchronisation
         run: |
-          rclone sync ./ gdrive: --exclude ".git/**" --exclude ".github/**"
+          rclone sync ./ gdrive: \
+            --exclude ".git/**" \
+            --exclude ".github/**" \
+            --checksum \
+            --no-update-modtime \
+            --fast-list \
+            --tpslimit 8 \
+            --tpslimit-burst 8 \
+            --transfers 4 \
+            --checkers 8 \
+            --stats 30s \
+            --log-level INFO
