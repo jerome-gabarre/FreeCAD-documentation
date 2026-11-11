@@ -2,7 +2,7 @@ name: Sync to Google Drive
 
 on:
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '0 5 * * *'
   workflow_dispatch:
 
 jobs:
@@ -42,4 +42,4 @@ jobs:
             --transfers 4 \
             --checkers 8 \
             --stats 30s \
-            --log-level INFO
+            --log-level DEBUG
