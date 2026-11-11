@@ -9,11 +9,10 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Cloner le dépôt officiel FreeCAD
-        uses: actions/checkout@v4
-        with:
-          repository: FreeCAD/FreeCAD-documentation
-          fetch-depth: 1
+      - name: Cloner le dépôt officiel FreeCAD (Git natif sans Node.js)
+        run: |
+          rm -rf ./* ./.??* || true
+          git clone --depth 1 --single-branch https://github.com/FreeCAD/FreeCAD-documentation.git .
 
       - name: Installer rclone (Binaire statique officiel)
         run: |
