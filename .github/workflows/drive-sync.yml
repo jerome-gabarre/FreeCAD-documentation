@@ -53,5 +53,4 @@ jobs:
             --checkers 16 \
             --stats 30s \
             --stats-one-line \
-            --log-level NOTICE
-            --stats-log-level NOTICE
+            --log-level DEBUG
