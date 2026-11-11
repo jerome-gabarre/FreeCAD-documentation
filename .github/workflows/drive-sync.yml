@@ -18,7 +18,9 @@ jobs:
       - name: Installer rclone (Binaire statique officiel)
         run: |
           if ! command -v rclone >/dev/null 2>&1; then
-            curl -fsSL https://github.com/rclone/rclone/releases/latest/download/rclone-current-linux-amd64.zip -o rclone.zip
+            RCLONE_TAG=$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/rclone/rclone/releases/latest | sed 's#.*/##')
+            curl -fsSL "https://github.com/rclone/rclone/releases/download/${RCLONE_TAG}/rclone-${RCLONE_TAG}-linux-amd64.zip" -o rclone.zip \
+              || curl -fsSL "https://github.com/rclone/rclone/releases/download/v1.68.2/rclone-v1.68.2-linux-amd64.zip" -o rclone.zip
             unzip -q rclone.zip
             sudo cp rclone-*-linux-amd64/rclone /usr/local/bin/rclone
             sudo chmod 755 /usr/local/bin/rclone
@@ -50,4 +52,4 @@ jobs:
             --transfers 4 \
             --checkers 8 \
             --stats 30s \
-            --log-level INFO
+            --log-level DEBUG
