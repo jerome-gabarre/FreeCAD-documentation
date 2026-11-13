@@ -1,20 +1,4 @@
-name: Sync to Google Drive
-
-on:
-  schedule:
-    - cron: '23 5 * * *'
-  workflow_dispatch:
-
-jobs:
-  sync:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Cloner le dépôt officiel FreeCAD (Git natif sans Node.js)
-        run: |
-          rm -rf ./* ./.??* || true
-          git clone --depth 1 --single-branch https://github.com/FreeCAD/FreeCAD-documentation.git .
-
-      - name: Compiler l'index exhaustif et les packs Markdown pour freecad-cfao-turbo-architect
+      - name: Compiler l'index exhaustif et les 5 packs Markdown purifiés (V2)
         run: |
           python3 - << 'EOF'
           import re
@@ -24,121 +8,134 @@ jobs:
           out_dir = Path("_skill_architect")
           out_dir.mkdir(exist_ok=True)
 
-          # Sélection stricte des fichiers Markdown en anglais (racine de wiki/ uniquement)
           all_en_md = sorted(
               [f for f in wiki_dir.iterdir() if f.is_file() and f.suffix == ".md"],
               key=lambda p: p.name.lower()
           )
 
-          # Nettoyage des balises HTML d'images et pieds de page de navigation MediaWiki
-          img_re = re.compile(r"<img[^>]*>", re.IGNORECASE)
+          # Regex de nettoyage profond MediaWiki / Pandoc -> Markdown propre
+          img_html_re = re.compile(r"<img[^>]*>", re.IGNORECASE)
+          img_md_re = re.compile(r"!\[[^\]]*\]\([^\)]*\)", re.IGNORECASE)
           nav_re = re.compile(r"^⏵\s*\[documentation index\].*$", re.MULTILINE)
+          div_re = re.compile(r"</?div[^>]*>", re.IGNORECASE)
+          nowiki_re = re.compile(r"</?nowiki>", re.IGNORECASE)
+          navi_tpl_re = re.compile(r"\{\{[^}]*navi[^}]*\}\}", re.IGNORECASE)
+          title_prop_re = re.compile(r"\{\{(?:TitleProperty|Properties_Title)\|([^}]+)\}\}", re.IGNORECASE)
+          inline_tpl_re = re.compile(r"\{\{(?:Incode|incode|Value|value|Button|button|KEY)\|([^}]+)\}\}")
+          code_block_re = re.compile(
+              r"\{\{[Cc]ode\|(?:lang=([a-zA-Z0-9_+-]+)\|)?code=\s*(.*?)\}\}",
+              re.DOTALL
+          )
+          redirect_re = re.compile(r"^\s*(?:1\.\s*REDIRECT|#REDIRECT)\s+", re.IGNORECASE | re.MULTILINE)
+
+          # Exclusions du bruit non-technique (brouillons, notes de version historiques, icônes, traductions)
+          exclude_prefixes = (
+              "sandbox_", "talk;", "category_", "artwork", "release_notes_",
+              "google_summer_of_code", "gsoc_", "crowdin", "donate", " swag"
+          )
+          exclude_exact = {
+              "german_translation.md", "french_translation.md", "italian_translation.md",
+              "polish_translation.md", "localisation.md", "localisation_sidebar.md",
+              "translating_an_external_workbench.md", "fr_widget_basics.md",
+              "free_cad_on_video.md", "freecad_on_video.md", "contributors.md"
+          }
 
           def clean_md(text: str) -> str:
-              text = img_re.sub("", text)
+              text = img_html_re.sub("", text)
+              text = img_md_re.sub("", text)
               text = nav_re.sub("", text)
+              text = div_re.sub("", text)
+              text = nowiki_re.sub("", text)
+              text = navi_tpl_re.sub("", text)
+              text = title_prop_re.sub(r"### \1", text)
+              text = inline_tpl_re.sub(r"`\1`", text)
+              text = code_block_re.sub(
+                  lambda m: f"```{m.group(1) or 'bash'}\n{m.group(2).strip()}\n```",
+                  text
+              )
               return re.sub(r"\n{3,}", "\n\n", text).strip()
 
-          # 1. Génération de la liste exhaustive et intégrale (00_INDEX_EXHAUSTIF_EN.md)
-          tech_count = sum(1 for f in all_en_md if f.stat().st_size >= 250)
-          stub_count = len(all_en_md) - tech_count
-
-          index_lines = [
-              "# Liste Exhaustive des Documents Anglais FreeCAD-documentation\n",
-              f"* **Total des fichiers `.md` en anglais (`wiki/`)** : {len(all_en_md)}",
-              f"* **Documents techniques (`>= 250 octets`)** : {tech_count}",
-              f"* **Stubs / Redirections (`< 250 octets`)** : {stub_count}\n",
-              "| Fichier | Taille (octets) | Statut |",
-              "| :--- | :---: | :--- |"
-          ]
-          for f in all_en_md:
-              size = f.stat().st_size
-              status = "Technique" if size >= 250 else "Stub/Redirection"
-              index_lines.append(f"| `{f.name}` | {size} | {status} |")
-
-          (out_dir / "00_INDEX_EXHAUSTIF_EN.md").write_text("\n".join(index_lines) + "\n", encoding="utf-8")
-          print(f"[SKILL-BUILD] 00_INDEX_EXHAUSTIF_EN.md -> {len(all_en_md)} entrées ({tech_count} techniques, {stub_count} stubs).")
-
-          # 2. Règles de routage vers les packs thématiques de la compétence (hors stubs < 250 octets)
-          core_exact = {
-              "source_documentation.md", "compile_on_linux.md", "compiling_(speeding_up).md",
-              "doxygen.md", "std_dependencygraph.md", "developer_hub.md", "power_users_hub.md",
-              "python_scripting_tutorial.md", "freecad_scripting_basics.md", "part_scripting.md",
-              "topological_data_scripting.md", "part_toposhape.md", "featurepython_objects.md",
-              "scripted_objects.md", "scenegraph.md", "coin3d.md", "mesh_scripting.md",
-              "opencascade.md", "vertex.md", "edge.md", "wire.md", "face.md", "shell.md",
-              "solid.md", "compsolid.md", "compound.md", "arc.md", "circle.md", "line.md",
-              "ellipse.md", "cone.md", "bsplinecurve.md", "bsplinesurface.md", "beziercurve.md",
-              "cylinder.md", "point.md", "sphere.md", "shape.md"
-          }
+          def is_valid_tech_doc(f: Path, raw_text: str) -> tuple[bool, str]:
+              lname = f.name.lower()
+              if not f.name.isascii():
+                  return False, "Non-ASCII/Traduction"
+              if f.stat().st_size < 250 or redirect_re.search(raw_text[:200]):
+                  return False, "Stub/Redirection"
+              if lname in exclude_exact or lname.startswith(exclude_prefixes):
+                  return False, "Hors-Périmètre (Meta/Sandbox)"
+              return True, "Technique"
 
           bundles = {
               "01_CORE_API_OCCT.md": [],
               "02_CAM_PATH_CNC.md": [],
-              "03_FEM_SOLVERS.md": [],
-              "04_CAD_PART_SKETCHER_TECHDRAW.md": [],
+              "03_FEM_SOLVERS_CFD_EM.md": [],
+              "04_CAD_PART_SKETCHER_ASSY_TECHDRAW.md": [],
+              "05_SURFACE_CURVES_DRAFT_GEAR_ROBOT_MACROS.md": [],
           }
 
-          for f in all_en_md:
-              if f.stat().st_size < 250:
-                  continue
-              lname = f.name.lower()
-              if lname in core_exact or "scripting" in lname or lname.startswith("std_"):
-                  bundles["01_CORE_API_OCCT.md"].append(f)
-              elif lname.startswith(("cam_", "path_")):
-                  bundles["02_CAM_PATH_CNC.md"].append(f)
-              elif lname.startswith("fem_"):
-                  bundles["03_FEM_SOLVERS.md"].append(f)
-              elif lname.startswith(("part_", "partdesign_", "sketcher_", "sheetmetal_", "assembly", "techdraw_", "mesh_", "openscad_")):
-                  bundles["04_CAD_PART_SKETCHER_TECHDRAW.md"].append(f)
+          index_rows = []
+          tech_total = 0
 
-          for bundle_name, files in bundles.items():
-              chunks = [f"# Référentiel Technique FreeCAD : {bundle_name}\n\nPages compilées : **{len(files)}**\n"]
-              for f in files:
-                  content = clean_md(f.read_text(encoding="utf-8", errors="replace"))
-                  chunks.append(f"\n---\n## Fichier : `{f.name}`\n\n{content}\n")
+          for f in all_en_md:
+              raw = f.read_text(encoding="utf-8", errors="replace")
+              valid, status = is_valid_tech_doc(f, raw)
+              size = f.stat().st_size
+              index_rows.append(f"| `{f.name}` | {size} | {status} |")
+              if not valid:
+                  continue
+
+              tech_total += 1
+              lname = f.name.lower()
+
+              # 1. CAM / CNC / OpenCamLib (Priorité haute pour garder CAM_scripting.md ici)
+              if lname.startswith(("cam_", "path_")) or lname in {"opencamlib.md"}:
+                  bundles["02_CAM_PATH_CNC.md"].append((f.name, clean_md(raw)))
+
+              # 2. FEM / Solveurs / Matériaux / CFD / Électromagnétisme
+              elif (
+                  lname.startswith(("fem_", "fembygen_", "cfd", "em_"))
+                  or "fem" in lname
+                  or "elmersolver" in lname
+                  or lname.startswith("material")
+              ):
+                  bundles["03_FEM_SOLVERS_CFD_EM.md"].append((f.name, clean_md(raw)))
+
+              # 3. CAO Solide, Sketcher (incluant Sketcher_scripting.md), Assemblage, Tôlerie, TechDraw, Mesh, OpenSCAD
+              elif lname.startswith((
+                  "part_", "part.", "partdesign_", "sketcher", "sketch.", "sheetmetal_",
+                  "assembly", "a2plus", "techdraw", "mesh", "openscad_", "import_open", "export_to_stl"
+              )):
+                  bundles["04_CAD_PART_SKETCHER_ASSY_TECHDRAW.md"].append((f.name, clean_md(raw)))
+
+              # 4. Surfaces NURBS, Courbes, Draft, Engrenages, Visserie, Robotique, Tableurs, Macros
+              elif lname.startswith((
+                  "surface_", "curves_", "curvedshapes", "draft_", "fcgear_", "fastener",
+                  "robot_", "spreadsheet", "macro_", "macros", "import_export", "dxf", "svg"
+              )):
+                  bundles["05_SURFACE_CURVES_DRAFT_GEAR_ROBOT_MACROS.md"].append((f.name, clean_md(raw)))
+
+              # 5. Core, API C++/Python, OpenCASCADE, App_*, Std_*, Compilation, Headless, Math/Topologie
+              else:
+                  bundles["01_CORE_API_OCCT.md"].append((f.name, clean_md(raw)))
+
+          # Écriture de l'index maître
+          index_header = [
+              "# Liste Exhaustive des Documents Anglais FreeCAD-documentation\n",
+              f"* **Total des fichiers `.md` à la racine de `wiki/`** : {len(all_en_md)}",
+              f"* **Documents techniques retenus et intégrés à 100 % dans les 5 packs** : {tech_total}\n",
+              "| Fichier | Taille (octets) | Statut |",
+              "| :--- | :---: | :--- |",
+          ]
+          (out_dir / "00_INDEX_EXHAUSTIF_EN.md").write_text(
+              "\n".join(index_header + index_rows) + "\n", encoding="utf-8"
+          )
+
+          for bundle_name, entries in bundles.items():
+              chunks = [f"# Référentiel Technique FreeCAD : {bundle_name}\n\nPages compilées : **{len(entries)}**\n"]
+              for fname, content in entries:
+                  chunks.append(f"\n---\n## Fichier : `{fname}`\n\n{content}\n")
               out_file = out_dir / bundle_name
               out_file.write_text("".join(chunks), encoding="utf-8")
-              print(f"[SKILL-BUILD] {bundle_name} -> {len(files)} fichiers intégrés ({out_file.stat().st_size // 1024} Ko).")
+              print(f"[SKILL-BUILD-V2] {bundle_name} -> {len(entries)} pages ({out_file.stat().st_size // 1024} Ko)")
           EOF
           ls -lh _skill_architect/
-
-      - name: Installer rclone (Binaire statique officiel)
-        run: |
-          if ! command -v rclone >/dev/null 2>&1; then
-            RCLONE_TAG=$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/rclone/rclone/releases/latest | sed 's#.*/##')
-            curl -fsSL "https://github.com/rclone/rclone/releases/download/${RCLONE_TAG}/rclone-${RCLONE_TAG}-linux-amd64.zip" -o rclone.zip \
-              || curl -fsSL "https://github.com/rclone/rclone/releases/download/v1.68.2/rclone-v1.68.2-linux-amd64.zip" -o rclone.zip
-            unzip -q rclone.zip
-            sudo cp rclone-*-linux-amd64/rclone /usr/local/bin/rclone
-            sudo chmod 755 /usr/local/bin/rclone
-            rm -rf rclone.zip rclone-*-linux-amd64
-          fi
-          rclone version
-
-      - name: Configurer rclone
-        env:
-          RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
-          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
-        run: |
-          mkdir -p ~/.config/rclone
-          printf "%s\n" "$RCLONE_CONF" > ~/.config/rclone/rclone.conf
-          printf "\nroot_folder_id = %s\n" "$GDRIVE_FOLDER_ID" >> ~/.config/rclone/rclone.conf
-
-      - name: Lancer la synchronisation
-        run: |
-          rclone sync ./ gdrive: \
-            --exclude ".git/**" \
-            --exclude ".github/**" \
-            --checksum \
-            --no-update-modtime \
-            --fast-list \
-            --drive-pacer-min-sleep 50ms \
-            --drive-pacer-burst 100 \
-            --tpslimit 10 \
-            --tpslimit-burst 10 \
-            --transfers 8 \
-            --checkers 16 \
-            --stats 30s \
-            --stats-one-line \
-            --log-level DEBUG
