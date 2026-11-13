@@ -15,8 +15,8 @@ jobs:
           git clone --depth 1 --single-branch https://github.com/FreeCAD/FreeCAD-documentation.git .
 
       - name: Compiler l'index exhaustif et les packs Markdown pour freecad-cfao-turbo-architect
-        shell: python3
         run: |
+          python3 - << 'EOF'
           import re
           from pathlib import Path
 
@@ -40,9 +40,14 @@ jobs:
               return re.sub(r"\n{3,}", "\n\n", text).strip()
 
           # 1. Génération de la liste exhaustive et intégrale (00_INDEX_EXHAUSTIF_EN.md)
+          tech_count = sum(1 for f in all_en_md if f.stat().st_size >= 250)
+          stub_count = len(all_en_md) - tech_count
+
           index_lines = [
               "# Liste Exhaustive des Documents Anglais FreeCAD-documentation\n",
-              f"Total des fichiers `.md` en anglais à la racine de `wiki/` : **{len(all_en_md)}**\n",
+              f"* **Total des fichiers `.md` en anglais (`wiki/`)** : {len(all_en_md)}",
+              f"* **Documents techniques (`>= 250 octets`)** : {tech_count}",
+              f"* **Stubs / Redirections (`< 250 octets`)** : {stub_count}\n",
               "| Fichier | Taille (octets) | Statut |",
               "| :--- | :---: | :--- |"
           ]
@@ -52,6 +57,7 @@ jobs:
               index_lines.append(f"| `{f.name}` | {size} | {status} |")
 
           (out_dir / "00_INDEX_EXHAUSTIF_EN.md").write_text("\n".join(index_lines) + "\n", encoding="utf-8")
+          print(f"[SKILL-BUILD] 00_INDEX_EXHAUSTIF_EN.md -> {len(all_en_md)} entrées ({tech_count} techniques, {stub_count} stubs).")
 
           # 2. Règles de routage vers les packs thématiques de la compétence (hors stubs < 250 octets)
           core_exact = {
@@ -91,8 +97,11 @@ jobs:
               for f in files:
                   content = clean_md(f.read_text(encoding="utf-8", errors="replace"))
                   chunks.append(f"\n---\n## Fichier : `{f.name}`\n\n{content}\n")
-              (out_dir / bundle_name).write_text("".join(chunks), encoding="utf-8")
-              print(f"[SKILL-BUILD] {bundle_name} -> {len(files)} fichiers intégrés.")
+              out_file = out_dir / bundle_name
+              out_file.write_text("".join(chunks), encoding="utf-8")
+              print(f"[SKILL-BUILD] {bundle_name} -> {len(files)} fichiers intégrés ({out_file.stat().st_size // 1024} Ko).")
+          EOF
+          ls -lh _skill_architect/
 
       - name: Installer rclone (Binaire statique officiel)
         run: |
