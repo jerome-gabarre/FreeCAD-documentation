@@ -14,6 +14,86 @@ jobs:
           rm -rf ./* ./.??* || true
           git clone --depth 1 --single-branch https://github.com/FreeCAD/FreeCAD-documentation.git .
 
+      - name: Compiler l'index exhaustif et les packs Markdown pour freecad-cfao-turbo-architect
+        shell: python3
+        run: |
+          import re
+          from pathlib import Path
+
+          wiki_dir = Path("wiki")
+          out_dir = Path("_skill_architect")
+          out_dir.mkdir(exist_ok=True)
+
+          # Sélection stricte des fichiers Markdown en anglais (racine de wiki/ uniquement)
+          all_en_md = sorted(
+              [f for f in wiki_dir.iterdir() if f.is_file() and f.suffix == ".md"],
+              key=lambda p: p.name.lower()
+          )
+
+          # Nettoyage des balises HTML d'images et pieds de page de navigation MediaWiki
+          img_re = re.compile(r"<img[^>]*>", re.IGNORECASE)
+          nav_re = re.compile(r"^⏵\s*\[documentation index\].*$", re.MULTILINE)
+
+          def clean_md(text: str) -> str:
+              text = img_re.sub("", text)
+              text = nav_re.sub("", text)
+              return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+          # 1. Génération de la liste exhaustive et intégrale (00_INDEX_EXHAUSTIF_EN.md)
+          index_lines = [
+              "# Liste Exhaustive des Documents Anglais FreeCAD-documentation\n",
+              f"Total des fichiers `.md` en anglais à la racine de `wiki/` : **{len(all_en_md)}**\n",
+              "| Fichier | Taille (octets) | Statut |",
+              "| :--- | :---: | :--- |"
+          ]
+          for f in all_en_md:
+              size = f.stat().st_size
+              status = "Technique" if size >= 250 else "Stub/Redirection"
+              index_lines.append(f"| `{f.name}` | {size} | {status} |")
+
+          (out_dir / "00_INDEX_EXHAUSTIF_EN.md").write_text("\n".join(index_lines) + "\n", encoding="utf-8")
+
+          # 2. Règles de routage vers les packs thématiques de la compétence (hors stubs < 250 octets)
+          core_exact = {
+              "source_documentation.md", "compile_on_linux.md", "compiling_(speeding_up).md",
+              "doxygen.md", "std_dependencygraph.md", "developer_hub.md", "power_users_hub.md",
+              "python_scripting_tutorial.md", "freecad_scripting_basics.md", "part_scripting.md",
+              "topological_data_scripting.md", "part_toposhape.md", "featurepython_objects.md",
+              "scripted_objects.md", "scenegraph.md", "coin3d.md", "mesh_scripting.md",
+              "opencascade.md", "vertex.md", "edge.md", "wire.md", "face.md", "shell.md",
+              "solid.md", "compsolid.md", "compound.md", "arc.md", "circle.md", "line.md",
+              "ellipse.md", "cone.md", "bsplinecurve.md", "bsplinesurface.md", "beziercurve.md",
+              "cylinder.md", "point.md", "sphere.md", "shape.md"
+          }
+
+          bundles = {
+              "01_CORE_API_OCCT.md": [],
+              "02_CAM_PATH_CNC.md": [],
+              "03_FEM_SOLVERS.md": [],
+              "04_CAD_PART_SKETCHER_TECHDRAW.md": [],
+          }
+
+          for f in all_en_md:
+              if f.stat().st_size < 250:
+                  continue
+              lname = f.name.lower()
+              if lname in core_exact or "scripting" in lname or lname.startswith("std_"):
+                  bundles["01_CORE_API_OCCT.md"].append(f)
+              elif lname.startswith(("cam_", "path_")):
+                  bundles["02_CAM_PATH_CNC.md"].append(f)
+              elif lname.startswith("fem_"):
+                  bundles["03_FEM_SOLVERS.md"].append(f)
+              elif lname.startswith(("part_", "partdesign_", "sketcher_", "sheetmetal_", "assembly", "techdraw_", "mesh_", "openscad_")):
+                  bundles["04_CAD_PART_SKETCHER_TECHDRAW.md"].append(f)
+
+          for bundle_name, files in bundles.items():
+              chunks = [f"# Référentiel Technique FreeCAD : {bundle_name}\n\nPages compilées : **{len(files)}**\n"]
+              for f in files:
+                  content = clean_md(f.read_text(encoding="utf-8", errors="replace"))
+                  chunks.append(f"\n---\n## Fichier : `{f.name}`\n\n{content}\n")
+              (out_dir / bundle_name).write_text("".join(chunks), encoding="utf-8")
+              print(f"[SKILL-BUILD] {bundle_name} -> {len(files)} fichiers intégrés.")
+
       - name: Installer rclone (Binaire statique officiel)
         run: |
           if ! command -v rclone >/dev/null 2>&1; then
