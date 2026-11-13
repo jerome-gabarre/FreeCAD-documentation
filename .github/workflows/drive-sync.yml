@@ -1,4 +1,4 @@
-      - name: Compiler l'index exhaustif et les 5 packs Markdown purifiés (V2)
+- name: Compiler l'index exhaustif et les 5 packs Markdown purifiés (V2)
         run: |
           python3 - << 'EOF'
           import re
